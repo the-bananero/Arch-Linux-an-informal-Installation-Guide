@@ -1,0 +1,400 @@
+
+:::::::::::::::::::::::::::::::::::: MI GUÍA ::::::::::::::::::::::::::::::::::::
+
+
+> MEDIDAS DE SEGURIDAD PREVIAS
+
+Primero que nada, no estaría mal verificar si el hash del .iso es el correcto; 
+para ello, antes de ingresar al entorno de instalación, ejecutar (por ej.) 
+'md5sum instalador_de_arch.iso' y comprobar si el hash coincide con el 
+señalado en https://archlinux.org/download/. Si estás en un Windows tendrás
+que hacerlo de otra manera. O no hacerlo : )
+
+Ahora bien, si eres de los paranoicos (y sobre todo si usas un módem, en vez de 
+un router, y por tanto no tienes el firewall de un router protegiéndote), 
+quizás quieras desconectar el internet para iniciar el instalador deArch, 
+luego desactivar el demonio sshd, para prevenir cualquier posible intrusión al 
+sistema live (ejecutar 'systemctl stop sshd.service') y entonces conectar 
+la internet de nuevo.
+
+
+> SELECCIONAR DISTRIBUCIÓN DE TECLADO
+
+Bastará con ejecutar 'loadkeys es' para establecer el idioma español en el 
+instalador de Arch (tener en cuenta que ese comando no servirá para hacer lo 
+mismo en el sistema que instalaremos; más adelante se explicará cómo hacerlo
+en ese caso).
+
+Por cierto que si se quisiera ver todas las distribuciones de teclado 
+disponibles, puede ejecutarse el comando 'ls /usr/share/kbd/keymaps/**/*.map.gz'.
+
+
+> VERIFICAR SI LA MODALIDAD DE ARRANQUE ES UEFI O BIOS/LEGACY
+
+El instalador de Arch utiliza systemd-boot para arrancar en modo UEFI y syslinux
+para arrancar en modo BIOS; saber en qué modo se ha arrancado es importante para 
+entender de qué manera deberemos particionar y/o montar el filesystem después.
+
+En caso de no tener claro de qué manera booteó el sistema, para comprobarlo 
+tocará listar el contenido de la carpeta "efivars", mediante el comando 
+'ls /sys/firmware/efi/efivars'. Si la respuesta es que no existe tal directorio, 
+el instalador está en modo BIOS, y si en cambio se lista el contenido del 
+directorio, entonces está en modo UEFI.
+
+
+> COMPROBAR LA CONEXIÓN A INTERNET
+
+Básicamente, bastará con hacer un ping a alguna url (ej. 'ping www.taringa.net') 
+para ver si tenemos o no conexión. Si tenemos internet cableada, seguramente ya
+esté andando. 
+
+Suele recomendarse actualizar la fecha y hora del sistema, para evitar problemas 
+al conectarnos a los servidores de Arch. El comando a ejecutar es 
+'timedatectl set-ntp true'. Para asegurarnos de que la hora quedó bien 
+configurada, podemos ejecutar el comando 'timedatectl status'.
+
+Puede pasar que vaya lenta la conexión al servidor de Arch que estemos usando. 
+En tal caso, se deberá usar reflector para auto-seleccionar otro servidor mejor.
+So, ejecutar los siguientes comandos:
+
+'pacman -Sy'
+'pacman -S reflector rsync'
+'cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.bak'
+'reflector --verbose -l 50 --sort rate --save /etc/pacman.d/mirrorlist'
+'pacman -Syy'
+
+El proceso de chequear 50 servidores y elegir el mejor tarda un rato, pero es la
+única solución que conozco, y REALMENTE necesaria si el fallo se da (la 
+instalación puede correr a... 20kbps... me ha pasado, y más de una vez).
+
+Por cierto, siempre puede ejecutarse el comando 'ip link' para ver qué 
+dispositivo de red ha sido detectado en nuestro equipo. En la mayoría de sistemas, 
+los dispositivos detectados aparecerán como "enp(xxxx)" cuando sean de internet 
+cableada, y "wlp(xxxx)" cuando sean inalambricos. Esto es útil para saber que no
+se ha omitido ningún dispositivo que tengamos.
+
+En cualquier caso, el instalador de Arch ejecuta por su cuenta el demonio/servicio 
+dhcpcd, el cual se encarga de ejecutar el protocolo DHCP, que nos conectará a 
+internet y nos brindará una IP dinámica. Pero en caso de que haber ocurrido 
+cualquier tipo de problema, y vayamos a intentar resolverlo manualmente, 
+deberemos ejecutar los siguientes comandos (estando conectados a internet):
+
+'systemctl enable dhcpcd.service'
+'systemctl enable dhcpcd@interface.service' (reemplazar "interface" por el nombre
+de nuestro dispositivo de red)
+
+Ahora, si se tiene una conexión inalambrica, tocará ejecutar 'iwctl' para activar 
+el wifi. Eso... lo agregaré algún día a la guía, pero no será hoy 👍
+
+> PARTICIONAR Y DAR FORMATO
+
+Primero, se debe ejecutar 'fdisk -l' para ver qué dispositivos ha reconocido el 
+instalador de Arch. Lo normal será ver al menos un disco duro tipo SATA (es decir, 
+un dispositivo listado como "/dev/sda"). Y desde luego, si tiene particiones, 
+aparecerán como sda1, sda2, etc.
+
+Primero, ejecutaremos el comando 'fdisk /dev/sdX'. Entraremos al prompt de fdisk, 
+donde aplican comandos especiales, de una sola letra. Los esenciales son:
+
+n = crear una partición.
+d = borrar una partición.
+l = listar los tipos de particiones.
+p = muestra la tabla de partición (similar a 'fdisk -l').
+t = cambia el tipo de partición.
+m = muestra la lista de comandos disponible.
+g = crea una tabla de partición nueva de tipo GPT.
+o = crea una tabla de partición nueva de tipo DOS.
+a = marca/desmarca una partición tipo DOS con el flag "boot".
+
+Ahora bien, en caso de que el disco esté vacío, tocará decidir qué tipo de tabla 
+de particiones queremos. Fundamentalmente tenemos las particiones tipo DOS 
+(también conocidas como "tipo BIOS" o "tipo legacy"), y las particiones tipo GPT 
+(las que se han implementado con los sistemas Windows más modernos). Las GPT 
+tienen la ventaja de que se puedan crear más de cuatro particiones primarias 
+(a diferencia de en las tipo DOS), pero tiene el requisito de una partición EFI 
+al inicio del disco, que se sirven para arrancar la PC en modo UEFI, y también 
+la instalación es levemente más compleja.
+
+Así pues, si el disco está vacío, o si queremos borrar todo, tocará ejecutar el 
+comando 'g' para crear una tabla de particiones tipo GPT, o el comando 'o' para 
+crear una tipo DOS. 
+
+Si queremos crear una partición, toca pulsar el comando 'n'. Si estamos en una 
+tabla tipo DOS, se nos preguntará si crear una partición primaria o extendida; 
+elegir primaria. Luego se nos preguntará en qué sector del disco debe empezar la 
+partición... pulsar simplemente enter, y se utilizará la opción por default  
+(situarla al principio del espacio libre en el disco). Luego se nos preguntará 
+donde debe acabar la partición, y aquí es donde viene lo útil, pues en vez de 
+señalar un sector, podremos señalar la extensión de la partición en medidas más 
+entendibles para nosotros; se trata de poner el signo más, y luego un número seguido 
+de K, M, G o T, con lo cual si por ej. ponemos '+500M', estaremos creando una 
+partición de 500 megabytes.  
+
+En principio, siempre habrá que crear al menos una partición, destinada al 
+directorio raíz del sistema ("/"), y además, también es útil crear otra para montar 
+home ("/home"), cosa que tiene su ventaja para que el día que debamos reinstalar, no 
+nos veamos obligados a mover todos nuestros archivos personales a otro lugar, sino 
+que los podremos dejar tranquilos en /home, mientras reemplazamos el sistema en / por 
+uno nuevo. Finalmente, si se desea se pueden hacer más particiones de uso general, 
+y además es posible crear una tipo swap (memoria de intercambio), si bien eso suele 
+ser innecesario en PCs modernas con mucha RAM. Ahora bien, todas las particiones 
+creadas aparecerán como "tipo linux", pero si hemos creado una swap, habrá que 
+marcarla como tipo swap; para eso, ingresar el comando 't', seleccionar la 
+partición swap, y a la pregunta de qué queremos hacer, teclear el comando 'L', que
+nos mostrará la lista de tipos de partición disponible; entonces pulsamos 'q' para
+salir de la lista, e ingresamos el número de tipo de partición correspondiente al 
+swap (el 19). Por último, si estamos usando una tabla de particiones DOS, se debe 
+marcar la partición del sistema con el flag "boot".
+
+Una vez creadas las particiones deseadas, tocará entrar el comando 'w' en fdisk, 
+para grabar en disco todas las tareas que hemos configurado.
+
+Finalizado todo esto, o bien sea que no hayamos necesitado crear particiones el paso
+final será formatearlas. En cuanto a la partición del sistema, lo habitual es darle 
+formato ext4, mediante el comando 'mkfs.ext4 /dev/sdaX' (X deberá reemplazarse por 
+el número de partición correspondiente, desde luego). En cuanto a /home, si vas a 
+formatearla, se le puede dar ext4 también, aunque claro que hay más opciones válidas 
+(en mi caso uso btrfs, 'mkfs.btrfs -f /dev/sdaX'). Y lo mismo deberá hacerse con 
+otras que hayamos creado. Si hay una swap, tocará ejecutar 'mkswap /dev/sdaX' para 
+darle formato.
+
+
+> MONTAR EL SISTEMA DE ARCHIVOS
+
+Usaremos el directorio /mnt del instalador de Arch, para montar el sistema de 
+archivos de nuestro futuro sistema operativo, cosa necesaria para instalarlo y 
+realizarle configuraciones diversas. La que será la partición del sistema, se 
+montará directamente en /mnt. Y si pensamos usar una partición para /home, 
+entonces deberemos crearle una carpeta correspondiente en /mnt, ejecutando 
+'mkdir /mnt/home', en la cual se montará /home. Por tanto los comandos serán:
+
+'mount /dev/sdaX /mnt'
+
+'mkdir /mnt/home && mount /dev/sdaX /mnt/home' (opcional, en caso de querer 
+un /home) 
+
+En caso de usar UEFI, tocará además hacer entonces:
+
+'mkdir /mnt/boot/efi'
+'mount /dev/sdaX /mnt/boot/efi' (normalmente será sda1)
+
+Si hemos creado una partición para el swap, habrá que activarlo ahora, mediante 
+el comando 'swapon /dev/sdaX.
+
+
+> INSTALAR EL SISTEMA
+
+En este caso, simplemente deberemos ir ejecutando diversos comandos, utilizando el
+script "pacstrap". El software que vayas a instalar depende puramente de tus 
+preferencias, pero es indispensable al menos un kernel (el paquete "linux", u otro
+como "linux-lts"), el paquete "base" y "linux-firmware", un editor de texto (ej. 
+"nano" o "vim") y además "networkmanager", y el paquete "amd-ucode" o "intel-ucode" 
+(según sea tu caso, dado el microprocesador que tengas).
+
+Algo importante: 'pacman -S archlinux-keyring'. Esto actualiza el depósito de claves
+del sistema live, sin lo cual la descarga de algunos paquetes puede fallar sin remedio.
+
+Ahora, a modo de ejemplo, dejaré aquí las cosas que yo instalo. Pero esto es puramente 
+ilustrativo, tú elige lo que quieras:
+
+# lo fundamental
+'pacstrap /mnt base linux-lts linux-firmware linux-lts-headers amd-ucode'
+
+# paquetes de administración, hardening y mantenimiento
+'pacstrap /mnt ufw rkhunter nethogs cpulimit lynis testdisk rsync fail2ban pkgstats nfs-utils xdg-user-dirs syslog-ng memtest86+ btrfs-progs apparmor clamav smartmontools dosfstools mtools arch-audit libpwquality ntp'
+
+# paquetes de utilidades de usuario
+'pacstrap /mnt nano mc ranger elinks htop mediainfo tree wget screenfetch dialog zip p7zip unrar vim gdu fuseiso ncdu freeimage cmatrix perl-image-exiftool cdrtools'
+
+# paquetes de utilidades para internet
+'pacstrap /mnt networkmanager dhcpcd iputils iproute2 nmap net-tools openssh bind traceroute arp-scan'
+
+# paquetes de utilidades de audio
+'pacstrap /mnt pulseaudio pulseaudio-alsa alsa-utils alsa-plugins cmus'
+
+# paquetes de instalación de software
+'pacstrap /mnt base-devel check git go cmake python-setuptools qt5-tools gcc make perl'
+
+# paquetes documentación
+'pacstrap /mnt man-db man-pages texinfo arch-wiki-lite' 
+
+# el paquete de grub
+'pacstrap /mnt grub-bios' (si tenemos BIOS Legacy)
+'pacstrap /mnt grub' (si tenemos UEFI)
+
+# paquetes necesarios si usaremos Linux junto a un Windows
+'pacstrap /mnt os-prober ntfs-3g'
+
+# paquete para conectar a internet via wifi
+'pacstrap /mnt netctl wpa_supplicant'
+
+# paquete de driver para los touchpad, si usaremos una laptop
+'pacstrap /mnt xf86-input-synaptics'
+
+# paquetes de Xorg, LightDM y Cinnamon? [yes/no] " var1
+'pacstrap /mnt xorg xorg-xinit xorg-twm xterm libxkbcommon feh xf86-video-ati lightdm lightdm-gtk-greeter cinnamon'
+
+# mis paquetes de software básico para entorno gráfico
+'pacstrap /mnt firefox libreoffice keepassxc kolourpaint xed gnote gnome-screenshot flameshot psensor gparted terminator easytag mediainfo-gui vlc mpv  transmission-gtk file-roller xreader gnome-system-monitor gnome-calculator simplescreenrecorder arch-audit-gtk nomacs viu'
+
+# mis paquetes de software extra para entorno gráfico (además de fuentes)
+'pacstrap /mnt chromium adobe-source-sans-pro-fonts ttf-freefont enchant gst-libav languagetool gvfs gimp mate-icon-theme minitube clipgrab audacity totem smplayer oxygen-icons noto-fonts-emoji unicode-emoji ttf-dejavu adobe-source-han-serif-jp-fonts adobe-source-han-sans-jp-fonts notepadqq'
+
+
+CONFIGURACIONES
+
+Ahora, vamos a generar un archivo fstab, el cual se encarga de gestionar el acceso 
+automatizado a las particiones (esencialmente, a /, y además -si las tenemos- a 
+ /home, a swap y cualquier otra que especifiquemos). Así, las particiones 
+incluidas serán montadas por el sistema, sin nuestra intervención. El comando a 
+ejecutar es 'genfstab -U /mnt >> /mnt/etc/fstab'. Podemos hacer si queremos luego
+'nano /mnt/etc/fstab' para comprobar que el archivo se haya creado según lo 
+previsto, o editarlo como se prefiera.
+
+Para lo siguiente, deberemos realizar una tarea algo más especializada, que es 
+ingresar desde el live cd al sistema que acabamos de instalar; es decir, vamos a
+acceder a su propio prompt y utilizar por primera vez nuestro nuevo Arch. Para 
+esto, ejecutaremos el comando 'arch-chroot /mnt'.
+
+Una vez ahí, lo primero será configurar la zona horaria para nuestro sistema. El
+comando será, en mi caso:
+
+'ln -sf /usr/share/zoneinfo/America/Buenos_Aires /etc/localtime'
+
+Por supuesto, esto variará según donde esté cada quien.
+
+Ahora, ejecutaremos 'hwclock --systohc' para tener la hora sincronizada con 
+nuestro horario local. Podemos ejecutar luego 'date' para comprobar que todo sea
+correcto.
+
+Lo siguiente será definir el idioma del sistema, cosa que haremos editando 
+'/etc/locale.gen' (con nano, vim o lo que sea) y lo que debemos hacer es borrar 
+los signos numeral delante de las lineas "es_ES.UTF-8 UTF-8" (o las que prefiramos,
+yo por ej. des-comento también "en_US.UTF-8 UTF-8"). Para buscarlas rápidamente con 
+nano, ejecutar "ctrl + w" (que toca repetir para cada vez que se quiera buscar algo, 
+presionando enter, claro). Al borrar los "#", lo que hacemos es des-comentar esas 
+líneas, por lo que pasan a ser código activo de los archivos. Hecho esto, ha de 
+ejecutarse el comando 'locale-gen' para que la edición hecha surta efecto. 
+
+Aunque con el paso anterior se habilitó una o más variantes para ser usadas, aun 
+tendremos que editar otro fichero más, para elegir la variante deseada (en mi caso, 
+español de España). Toca ejecutar 'nano /etc/locale.conf' para ello, lo que creará 
+el fichero; allí escribiremos el texto correspondiente (en mi caso "LANG=es_ES.UTF-8").
+
+Hecho esto, lo siguiente será fijar el idioma de la distribución de teclado. Aunque 
+para el live cd la orden había sido 'loadkeys es', en este caso lo que haremos será 
+ejecutar 'nano /etc/vconsole.conf' (lo que una vez más, creará el archivo), y ahí se 
+deberá escribir "KEYMAP=es". La razón de tener que hacer esto es que el efecto
+de loadkeys, sólo dura mientras el equipo no se reinicie.
+
+Ahora tocará hacer algunos ajustes de red.
+
+Básicamente, tocará definir el hostname. Para eso, crearemos el archivo 
+correspondiente vía 'nano /etc/hostname', en donde únicamente escribiremos el 
+nombre que vayamos a darle al equipo en la red. Luego, tocará ejecutar
+'nano /etc/hosts' y ahí escribir lo siguiente:
+
+127.0.0.1	localhost
+::1         localhost
+127.0.1.1	nombre-elegido-para-el-hostname
+
+Hecho eso, seguirá ahora un punto fundamental: instalar y configurar el grub. Sin 
+esto el sistema básicamente no arrancará. El comando de instalación variará según 
+estemos usando BIOS o UEFI. 
+
+Si usas BIOS Legacy: 'grub-install /dev/sda' (si el disco no fuera "sda", cambiarlo 
+por el correspondiente; es importante notar que hay que señalar el disco en si, no 
+un número de partición en específico, como sda1 o sdb1).
+
+Si usas UEFI: 'grub-install --efi-directory=/boot/efi --bootloader-id='Arch Linux' --target=x86_64-efi'
+
+Luego, en cualquiera de los dos casos, ejecutar 
+'grub-mkconfig -o /boot/grub/grub.cfg', que actualizará el grub. En caso de no 
+haber reportado que encontrara un Windows que tengamos en el equipo, ejecutar 
+'os-prober' y luego nuevamente 'grub-mkconfig -o /boot/grub/grub.cfg'.
+
+Y así habremos llegado casi al final. Lo último será ejecutar 'passwd' para 
+asignar una password a root, y entonces la instalación habrá finalizado.
+
+Tras eso, toca salir del prompt del sistema instalado, mediante 'exit' y desmontar 
+las particiones que se hayan montado en /mnt. Luego ya se podrá reiniciar y probar 
+el sistema nuevo. Pero algo importante: NO recomiendo NUNCA iniciar el sistema nuevo 
+conectado a internet, hasta haber implementado al menos algunas medidas básicas de 
+seguridad (cuanto menos iniciar el firewall, por el amor de Cthulhu xd). No detallaré
+aquí medidas de hardening, pero puedes ver la guía de Arch al respecto, en 
+https://wiki.archlinux.org/title/Security (está bastante incompleta, a mi juicio, so
+deberías complementarla con otras; más adelante yo subiré mi propia guía también); 
+también puedes ejecutar los auditores Lynis y Yasat para ir resolviendo problemas.
+
+
+> ALGUNAS TAREAS POST REINICIO
+
+Iniciar el firewall:
+
+'systemctl start ufw.service'
+
+'systemctl enable ufw.service'
+
+'ufw status' (opcional, se comprobará que aun no está activo SABER QUÉ ESTÁ)
+
+'ufw enable'
+
+
+> iniciar networkmanager
+
+'systemctl start NetworkManager.service' (si, en mayusculas)
+
+'systemctl enable NetworkManager.service' (idem)
+
+Si hubiera problemas al instalar o actualizar software, donde nos de un mensaje
+de "error 404", ejecutar 'pacman -Syyuu'; este error aparecerá en cualquier 
+momento.
+
+
+> añadir otros usuarios al sistema
+
+'groupadd tu_grupo'
+'useradd -m -g tu_grupo -G audio,video,storage,games -s /bin/bash tu_usuario'
+
+
+> configurar la distribución de teclado para Xorg
+
+'localectl set-x11-keymap es' 
+
+
+> iniciar lightdm (opcional)
+
+'systemctl enable lightdm'
+
+Notar que a diferencia de otras ocasiones, no hemos hecho la orden "start",
+sino tan solo "enable", y eso tiene una razón de ser: si hacemos start, 
+entonces lightdm se ejecutará en ese mismo momento, apareciendo en pantalla
+y obligándonos a entrar sesión (aunque podemos abrir otra tty -terminal- 
+haciendo ctrl+alt+f2). 
+
+
+> hacer una copia de seguridad del sistema
+
+Por si revientas tu nuevo Arch, nada mejor que echar mano a él otra vez sin tener 
+que pasar por todo el sufrimiento de una re-instalación : )
+
+Recomiendo usar Macrium Reflect. Búscalo "por ahí" xD (si me contactas te lo puedo pasar).
+
+Con Linux, se puede usar el software rsync. Si se quieren copias inteligentes (que 
+copien todo la primera vez, y en adelante, sólo lo que ha sido modificado). Su 
+sintaxis es:
+
+rsync -aAXlv --delete --exclude=XXXX origen destino
+
+Para copiar nuestra partición del sistema, recomiendo iniciar un sistema live y 
+crear dos carpetas en /mnt, disco1 y disco2, y montar en la primera nuestra partición
+del sistema y en la segunda la partición donde lo copiaremos. En ese caso, el comando
+sería:
+
+rsync -aAXlv --delete --exclude=/dev --exclude=/run --exclude=/sys --exclude=/proc --exclude=/tmp --exclude=/mnt --exclude=/media --exclude=/home --exclude=swapfile --exclude=lost+found /mnt/prueba1 /mnt/prueba2
+
+Si el lugar donde guardaremos la copia de seguridad NO es privado, y puede ser 
+accedido por users estándar, recomiendo excluir también la carpeta personal de root, 
+a fin de que sus archivos privados no se vean expuestos.
+
+
