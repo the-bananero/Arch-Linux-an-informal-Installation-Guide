@@ -1,6 +1,8 @@
 
 :::::::::::::::::::::::::::::::::::: MI GUÍA ::::::::::::::::::::::::::::::::::::
 
+Disclaimer - no me hago cargo de nada si tu pc vuela por los aires ; )
+
 
 > MEDIDAS DE SEGURIDAD PREVIAS
 
@@ -386,8 +388,11 @@ sintaxis es:
 
 rsync -aAXlv --delete --exclude=XXXX origen destino
 
-Para copiar nuestra partición del sistema, recomiendo iniciar un sistema live y 
-crear dos carpetas en /mnt, disco1 y disco2, y montar en la primera nuestra partición
+Recomiendo probarlo bastante antes de usarlo para copiar tu sistema eh Es un software 
+extremadamente útil pero con sus... asperezas.
+
+Ahora bien, para copiar nuestra partición del sistema, recomiendo iniciar un sistema live 
+y crear dos carpetas en /mnt, disco1 y disco2, y montar en la primera nuestra partición
 del sistema y en la segunda la partición donde lo copiaremos. En ese caso, el comando
 sería:
 
