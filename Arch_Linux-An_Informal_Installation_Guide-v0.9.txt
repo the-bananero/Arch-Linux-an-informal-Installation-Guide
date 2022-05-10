@@ -233,7 +233,7 @@ ilustrativo, tú elige lo que quieras:
 # paquete de driver para los touchpad, si usaremos una laptop
 'pacstrap /mnt xf86-input-synaptics'
 
-# paquetes de Xorg, LightDM y Cinnamon? [yes/no] " var1
+# paquetes de Xorg, LightDM y Cinnamon
 'pacstrap /mnt xorg xorg-xinit xorg-twm xterm libxkbcommon feh xf86-video-ati lightdm lightdm-gtk-greeter cinnamon'
 
 # mis paquetes de software básico para entorno gráfico
